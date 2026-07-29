@@ -7,12 +7,14 @@ stay below new-file LOC. Frozen for features, open for security (cherry-pick onl
 
 | Patch | Status | What | Why | Where |
 |---|---|---|---|---|
-| fork-06b | LANDING (P2) | `{{LIBRECHAT_CONVERSATION_ID}}` header placeholder for custom endpoints | Per-conversation Langfuse grouping (ADR-8/13) | header resolution + 1 call site |
-| fork-01 | LANDING (P2) | Render ```chart/```echarts fences as live ECharts in messages | WW agent emits charts; §4 B5 | client/src/components/ww/EChartsBlock.tsx + markdown registry |
-| fork-02 | LANDING (P2) | "⚡ deep reasoning" route chip in the Thoughts section | §4 B8 escalation visibility | client/src/components/ww/RouteChip.tsx + reasoning renderer |
+| fork-06b | ✅ LANDED ab3b78874 | `{{LIBRECHAT_CONVERSATION_ID}}` header placeholder for custom endpoints | Per-conversation Langfuse grouping (ADR-8/13) | header resolution + 1 call site |
+| fork-01 | ✅ LANDED e7cee7988 | Render ```chart/```echarts fences as live ECharts in messages | WW agent emits charts; §4 B5 | client/src/components/ww/EChartsBlock.tsx + markdown registry |
+| fork-02 | ✅ LANDED 5ecd08151 | "⚡ deep reasoning" route chip in the Thoughts section | §4 B8 escalation visibility | client/src/components/ww/RouteChip.tsx + reasoning renderer |
 | fork-03 | PILOT-GATED | Structured tool-step rows | §4 B6 | reserved |
 | fork-04 | PILOT-GATED (ADR-12) | Pin-to-dashboard button | Conversational pin_to_dashboard tool covers B7; button adds CORS+credentialed cross-origin surface | reserved |
 | fork-05 | LIKELY DROP | Mermaid pan/zoom | v0.8.7 ships zoom natively (P0); confirm-drop test on large diagram pending | reserved |
-| fork-06 | CONDITIONAL | Branding beyond config | Only if librechat.yaml interface config falls short | reserved |
+| fork-06 | ❌ DROPPED (config sufficed) | Branding beyond config | Only if librechat.yaml interface config falls short | reserved |
 
-Non-patch commits on ww/patches (infra, not counted in budget): this manifest, .github/workflows/ww-ci.yml, Dependabot config.
+Non-patch commits on ww/patches (infra, not counted in budget): this manifest, .github/workflows/ww-ci.yml (Dependabot alerts enabled via repo settings).
+
+Health check 2026-07-29: total diff vs v0.8.7 = +443/-3; upstream-touched source lines ~33 vs ~250 new-file lines — metric satisfied. fork-06 dropped: v0.8.7 interface config covers all governance needs (agents/marketplace/memories/webSearch/runCode/public-shares).
