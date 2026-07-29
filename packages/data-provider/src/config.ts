@@ -962,6 +962,8 @@ export const endpointSchema = baseEndpointSchema.merge(
       ).join(', ')}`,
     }),
     apiKey: z.string(),
+    /** Server-managed masked preview of an admin-encrypted `apiKey`; never written by clients. */
+    displayApiKey: z.string().optional(),
     baseURL: z.string(),
     models: z.object({
       default: z.array(modelItemSchema).min(1),

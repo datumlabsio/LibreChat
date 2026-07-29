@@ -8,6 +8,7 @@ import { initializeBedrock } from '../bedrock/initialize';
 import { initializeCustom } from '../custom/initialize';
 import { initializeGoogle } from '../google/initialize';
 import { initializeOpenAI } from '../openai/initialize';
+import { resolveCustomEndpointSecrets } from '~/admin/secrets';
 import { getCustomEndpointConfig } from '~/app/config';
 
 /**
@@ -191,7 +192,7 @@ export function getProviderConfig({
           `Provider ${provider} is ambiguous: multiple custom endpoints match case-insensitively (${names}). Rename one or use the exact-case provider value.`,
         );
       }
-      customEndpointConfig = matches[0];
+      customEndpointConfig = matches[0] && resolveCustomEndpointSecrets(matches[0]);
     }
     if (!customEndpointConfig) {
       throw new Error(`Provider ${provider} not supported`);

@@ -13,13 +13,14 @@ import type { Response } from 'express';
 import type { CapabilityUser } from '~/middleware/capabilities';
 import type { ServerRequest } from '~/types/http';
 import {
-  encryptConfigSecretFields,
-  encryptConfigSecrets,
+  configOverridesNeedSecretPreservation,
+  isConfigSecretPreservablePatch,
   getConfigSecretMutationPaths,
-  getConfigSecretInputError,
-  isConfigSecretAncestorPath,
   isConfigSecretDescendantPath,
+  encryptConfigSecretFields,
+  getConfigSecretInputError,
   preserveConfigSecrets,
+  encryptConfigSecrets,
   redactConfigSecrets,
 } from './secrets';
 
@@ -319,22 +320,13 @@ function redactAppConfigForResponse(appConfig: AppConfig): AppConfig {
   return safeConfig;
 }
 
-function isObjectValuedLangfusePatch(fieldPath: string, value: unknown): boolean {
-  return (
-    isConfigSecretAncestorPath(fieldPath) &&
-    value != null &&
-    typeof value === 'object' &&
-    !Array.isArray(value)
-  );
-}
-
 function preservePatchedConfigSecretFields(
   fields: Record<string, unknown>,
   existingOverrides?: unknown,
 ): Record<string, unknown> {
   const result = { ...fields };
   for (const [fieldPath, value] of Object.entries(result)) {
-    if (isObjectValuedLangfusePatch(fieldPath, value)) {
+    if (isConfigSecretPreservablePatch(fieldPath, value)) {
       result[fieldPath] = preserveConfigSecrets(value, existingOverrides, fieldPath);
     }
   }
@@ -595,19 +587,18 @@ export function createAdminConfigHandlers(deps: AdminConfigDeps): {
         ? { expectEmpty: false }
         : { expectEmpty: true, preservePriority: true };
 
-      const langfuseInputError = getConfigSecretInputError(
-        'langfuse',
-        (filteredOverrides as Record<string, unknown>).langfuse,
-      );
-      if (langfuseInputError) {
-        return res.status(400).json({ error: langfuseInputError });
+      for (const [section, value] of Object.entries(filteredOverrides as Record<string, unknown>)) {
+        if (section.includes('.')) {
+          continue;
+        }
+        const secretInputError = getConfigSecretInputError(section, value);
+        if (secretInputError) {
+          return res.status(400).json({ error: secretInputError });
+        }
       }
 
       const encryptedOverrides = encryptConfigSecrets(filteredOverrides);
-      const existingForSecrets = isObjectValuedLangfusePatch(
-        'langfuse',
-        (filteredOverrides as Record<string, unknown>).langfuse,
-      )
+      const existingForSecrets = configOverridesNeedSecretPreservation(filteredOverrides)
         ? await findConfigByPrincipal(principalType, principalId, { includeInactive: true })
         : null;
       const preservedOverrides = preserveConfigSecrets(
@@ -687,11 +678,6 @@ export function createAdminConfigHandlers(deps: AdminConfigDeps): {
         if (secretInputError) {
           return res.status(400).json({ error: secretInputError });
         }
-        if (Array.isArray(entry.value) && isConfigSecretAncestorPath(entry.fieldPath)) {
-          return res.status(400).json({
-            error: `Cannot patch protected secret ancestor as an array: ${entry.fieldPath}`,
-          });
-        }
       }
 
       const user = getCapabilityUser(req);
@@ -754,11 +740,11 @@ export function createAdminConfigHandlers(deps: AdminConfigDeps): {
       }
       const requestedPriority = hasBroadManage ? priority : undefined;
 
-      const hasObjectValuedLangfusePatch = Object.entries(fields).some(([fieldPath, value]) =>
-        isObjectValuedLangfusePatch(fieldPath, value),
+      const hasPreservableSecretPatch = Object.entries(fields).some(([fieldPath, value]) =>
+        isConfigSecretPreservablePatch(fieldPath, value),
       );
       const existing =
-        requestedPriority == null || hasObjectValuedLangfusePatch
+        requestedPriority == null || hasPreservableSecretPatch
           ? await findConfigByPrincipal(principalType, principalId, { includeInactive: true })
           : null;
       const encryptedFields = encryptConfigSecretFields(fields);
