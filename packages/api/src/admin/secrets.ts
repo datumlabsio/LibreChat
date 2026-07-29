@@ -60,7 +60,15 @@ const CUSTOM_ENDPOINT_SECRET: ArraySecretSpec = {
 const SECTION_SECRET_SPECS: SectionSecretSpec[] = [LANGFUSE_SECRET];
 const ARRAY_SECRET_SPECS: ArraySecretSpec[] = [CUSTOM_ENDPOINT_SECRET];
 
+/**
+ * Masked preview of a secret. Values shorter than 12 characters mask fully —
+ * the first-six/last-four slices would otherwise overlap and reveal the
+ * entire credential.
+ */
 export function getDisplaySecretKey(secret: string): string {
+  if (secret.length < 12) {
+    return '...';
+  }
   return secret.slice(0, 6) + '...' + secret.slice(-4);
 }
 
@@ -210,6 +218,11 @@ export function configOverridesNeedSecretPreservation(overrides: unknown): boole
   return [...sections].some((section) => isConfigSecretPreservablePatch(section, root[section]));
 }
 
+/** Numeric indices plus MongoDB positional operators (`$`, `$[]`, `$[id]`). */
+function isArrayIndexSegment(segment: string): boolean {
+  return /^\d+$/.test(segment) || segment.includes('$');
+}
+
 function getIndexedSecretPathError(fieldPath: string): string | null {
   for (const spec of ARRAY_SECRET_SPECS) {
     const prefix = `${spec.arrayPath}.`;
@@ -217,7 +230,7 @@ function getIndexedSecretPathError(fieldPath: string): string | null {
       continue;
     }
     const segments = fieldPath.slice(prefix.length).split('.');
-    if (!/^\d+$/.test(segments[0])) {
+    if (!isArrayIndexSegment(segments[0])) {
       continue;
     }
     if (
@@ -235,7 +248,7 @@ function isIndexedEntryPath(fieldPath: string, spec: ArraySecretSpec): boolean {
   if (!fieldPath.startsWith(prefix)) {
     return false;
   }
-  return /^\d+$/.test(fieldPath.slice(prefix.length));
+  return isArrayIndexSegment(fieldPath.slice(prefix.length));
 }
 
 function getEncryptedArrayEntryError(
@@ -503,17 +516,22 @@ function preserveArraySecrets(
     }
     const identity = normalizeSecretString(entry[spec.identityKey]);
     const existingEntry = identity ? existingByIdentity.get(identity) : undefined;
-    if (!existingEntry || !isEncryptedConfigSecret(existingEntry[spec.secretKey])) {
+    const existingSecret = normalizeSecretString(existingEntry?.[spec.secretKey]);
+    if (!existingEntry || !existingSecret) {
       continue;
     }
-    const existingSecret = normalizeSecretString(existingEntry[spec.secretKey]);
-    if (!existingSecret) {
+    if (isEncryptedConfigSecret(existingSecret)) {
+      entry[spec.secretKey] = existingSecret;
+      if (typeof existingEntry[spec.displayKey] === 'string') {
+        entry[spec.displayKey] = existingEntry[spec.displayKey];
+      }
       continue;
     }
-    entry[spec.secretKey] = existingSecret;
-    if (typeof existingEntry[spec.displayKey] === 'string') {
-      entry[spec.displayKey] = existingEntry[spec.displayKey];
+    if (spec.isPassthroughValue(existingSecret)) {
+      continue;
     }
+    entry[spec.secretKey] = encryptV3(existingSecret);
+    entry[spec.displayKey] = getDisplaySecretKey(existingSecret);
   }
 }
 

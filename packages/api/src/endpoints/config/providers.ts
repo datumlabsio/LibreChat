@@ -3,12 +3,12 @@ import { EModelEndpoint } from 'librechat-data-provider';
 import type { TEndpoint } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import type { BaseInitializeParams, InitializeResultBase } from '~/types';
+import { resolveCustomEndpointSecrets } from '~/admin/secrets';
 import { initializeAnthropic } from '../anthropic/initialize';
 import { initializeBedrock } from '../bedrock/initialize';
 import { initializeCustom } from '../custom/initialize';
 import { initializeGoogle } from '../google/initialize';
 import { initializeOpenAI } from '../openai/initialize';
-import { resolveCustomEndpointSecrets } from '~/admin/secrets';
 import { getCustomEndpointConfig } from '~/app/config';
 
 /**

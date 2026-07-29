@@ -279,8 +279,28 @@ describe('Custom endpoint config secrets', () => {
     ).toContain('Cannot write secret fields by array index');
     expect(getConfigSecretInputError('endpoints.custom.0.baseURL', 'https://x')).toBeNull();
     expect(
-      getConfigSecretInputError('endpoints.custom', [{ name: 'A', apiKey: 'sk-plain' }]),
+      getConfigSecretInputError('endpoints.custom', [{ name: 'A', apiKey: 'sk-plain-1234' }]),
     ).toBeNull();
+  });
+
+  it('rejects positional-operator writes to secret fields', () => {
+    expect(getConfigSecretInputError('endpoints.custom.$[].apiKey', 'sk-new-value')).toContain(
+      'Cannot write secret fields by array index',
+    );
+    expect(getConfigSecretInputError('endpoints.custom.$.displayApiKey', 'spoof')).toContain(
+      'Cannot write secret fields by array index',
+    );
+    expect(
+      getConfigSecretInputError('endpoints.custom.$[elem]', { name: 'A', apiKey: 'sk-new' }),
+    ).toContain('Cannot write secret fields by array index');
+  });
+
+  it('fully masks display previews of short secrets', () => {
+    const out = encryptConfigSecrets(endpointsWith([{ name: 'A', apiKey: 'secret' }]));
+    const entry = out.endpoints.custom[0] as Record<string, string>;
+
+    expect(decryptV3(entry.apiKey)).toBe('secret');
+    expect(entry.displayApiKey).toBe('...');
   });
 
   it('preserves omitted API keys by endpoint name across redacted round-trips', () => {
@@ -303,6 +323,27 @@ describe('Custom endpoint config secrets', () => {
     expect(decryptV3(openRouter.apiKey)).toBe('sk-or-old-secret');
     expect(openRouter.displayApiKey).toBe('sk-or-...cret');
     expect(brandNew.apiKey).toBeUndefined();
+  });
+
+  it('preserves and encrypts plaintext-legacy API keys on redacted round-trips', () => {
+    const existing = endpointsWith([
+      { name: 'Legacy', apiKey: 'sk-legacy-plaintext' },
+      { name: 'EnvRef', apiKey: '${OPENROUTER_KEY}' },
+    ]);
+    const next = encryptConfigSecrets(
+      endpointsWith([
+        { name: 'Legacy', baseURL: 'https://legacy.example' },
+        { name: 'EnvRef', baseURL: 'https://ref.example' },
+      ]),
+    );
+
+    const preserved = preserveConfigSecrets(next, existing);
+    const [legacy, envRef] = preserved.endpoints.custom as Array<Record<string, string>>;
+
+    expect(legacy.apiKey).toMatch(/^v3:/);
+    expect(decryptV3(legacy.apiKey)).toBe('sk-legacy-plaintext');
+    expect(legacy.displayApiKey).toBe('sk-leg...text');
+    expect(envRef.apiKey).toBeUndefined();
   });
 
   it('preserves omitted API keys for array-valued patches, not cleared ones', () => {

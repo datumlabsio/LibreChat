@@ -1,8 +1,8 @@
-import { getTransactionsConfig, getBalanceConfig, getCustomEndpointConfig } from './config';
 import { logger, encryptV3 } from '@librechat/data-schemas';
 import { FileSources, EModelEndpoint } from 'librechat-data-provider';
 import type { TCustomConfig, TEndpoint } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
+import { getTransactionsConfig, getBalanceConfig, getCustomEndpointConfig } from './config';
 
 // Helper function to create a minimal AppConfig for testing
 const createTestAppConfig = (overrides: Partial<AppConfig> = {}): AppConfig => {

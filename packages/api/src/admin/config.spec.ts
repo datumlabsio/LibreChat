@@ -43,6 +43,14 @@ describe('isValidFieldPath', () => {
     expect(isValidFieldPath('prototypeChain')).toBe(true);
     expect(isValidFieldPath('a.myConstructor')).toBe(true);
   });
+
+  it('rejects MongoDB operator segments', () => {
+    expect(isValidFieldPath('endpoints.custom.$[].apiKey')).toBe(false);
+    expect(isValidFieldPath('endpoints.custom.$.apiKey')).toBe(false);
+    expect(isValidFieldPath('endpoints.custom.$[elem].apiKey')).toBe(false);
+    expect(isValidFieldPath('a.$set')).toBe(false);
+    expect(isValidFieldPath('$')).toBe(false);
+  });
 });
 
 describe('getTopLevelSection', () => {
