@@ -1,0 +1,7 @@
+# CVE-2026-59873 (tar 7.5.13, CRITICAL): npm's own bundled copy at
+# /usr/local/lib/node_modules/npm/node_modules/tar in the node base image.
+# npm is never invoked at container runtime (build-time only), so the gzip-bomb
+# DoS path is not reachable in the running service. Not an app dependency
+# (absent from package-lock.json). Revisit whenever the base image is refreshed
+# or if npm is ever added to a runtime path. Recorded 2026-07-29 (ww-sec).
+CVE-2026-59873

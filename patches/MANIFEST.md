@@ -12,9 +12,11 @@ stay below new-file LOC. Frozen for features, open for security (cherry-pick onl
 | fork-02 | ✅ LANDED 5ecd08151 | "⚡ deep reasoning" route chip in the Thoughts section | §4 B8 escalation visibility | client/src/components/ww/RouteChip.tsx + reasoning renderer |
 | fork-03 | PILOT-GATED | Structured tool-step rows | §4 B6 | reserved |
 | fork-04 | PILOT-GATED (ADR-12) | Pin-to-dashboard button | Conversational pin_to_dashboard tool covers B7; button adds CORS+credentialed cross-origin surface | reserved |
-| fork-05 | LIKELY DROP | Mermaid pan/zoom | v0.8.7 ships zoom natively (P0); confirm-drop test on large diagram pending | reserved |
+| fork-05 | ❌ DROPPED (confirmed 2026-07-29) | Mermaid pan/zoom | v0.8.7 ships zoom natively (P0); confirm-drop test on large diagram pending | reserved |
 | fork-06 | ❌ DROPPED (config sufficed) | Branding beyond config | Only if librechat.yaml interface config falls short | reserved |
 
-Non-patch commits on ww/patches (infra, not counted in budget): this manifest, .github/workflows/ww-ci.yml (Dependabot alerts enabled via repo settings).
+Non-patch commits on ww/patches (infra, not counted in budget): this manifest, .github/workflows/ww-ci.yml (Dependabot alerts enabled via repo settings), ww-sec security cherry-picks (policy-sanctioned).
+
+Security log: 2026-07-29 ww-sec-1 — websocket-driver 0.7.4→0.7.5 (CVE-2026-54466, override) + .trivyignore for npm-bundled tar CVE-2026-59873 (build-time only, not runtime-reachable). fork-05 confirm-drop: v0.8.7 Expand = full-screen viewer with zoom/reset controls, verified on patched image.
 
 Health check 2026-07-29: total diff vs v0.8.7 = +443/-3; upstream-touched source lines ~33 vs ~250 new-file lines — metric satisfied. fork-06 dropped: v0.8.7 interface config covers all governance needs (agents/marketplace/memories/webSearch/runCode/public-shares).

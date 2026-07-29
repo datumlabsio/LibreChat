@@ -187,7 +187,8 @@
     },
     "svgo": "^2.8.2",
     "js-yaml": "^4.2.0",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "websocket-driver": "^0.7.5"
   },
   "nodemonConfig": {
     "ignore": [
