@@ -18,5 +18,6 @@ stay below new-file LOC. Frozen for features, open for security (cherry-pick onl
 Non-patch commits on ww/patches (infra, not counted in budget): this manifest, .github/workflows/ww-ci.yml (Dependabot alerts enabled via repo settings), ww-sec security cherry-picks (policy-sanctioned).
 
 Security log: 2026-07-29 ww-sec-1 — websocket-driver 0.7.4→0.7.5 (CVE-2026-54466, override) + .trivyignore for npm-bundled tar CVE-2026-59873 (build-time only, not runtime-reachable). fork-05 confirm-drop: v0.8.7 Expand = full-screen viewer with zoom/reset controls, verified on patched image.
+2026-07-29 ww-sec-2 — Dependabot triage of 61 findings (see patches/SECURITY-TRIAGE-2026-07-29.md): 10 runtime-reachable highs fixed via overrides/range bumps (axios 1.19.0, sharp 0.35.3, protobufjs 7.6.5, js-yaml 4.3.0, fast-uri 3.1.4, postcss 8.5.25, @opentelemetry/propagator-jaeger 2.9.0, brace-expansion 2.1.3); 4 highs accepted with rationale (dev-only / not in deployed artifact / no in-major fix); moderates+lows triaged in doc. Next review 2026-08-05.
 
 Health check 2026-07-29: total diff vs v0.8.7 = +443/-3; upstream-touched source lines ~33 vs ~250 new-file lines — metric satisfied. fork-06 dropped: v0.8.7 interface config covers all governance needs (agents/marketplace/memories/webSearch/runCode/public-shares).
