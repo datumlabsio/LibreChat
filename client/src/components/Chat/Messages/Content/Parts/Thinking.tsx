@@ -4,6 +4,7 @@ import { Lightbulb, ChevronDown, ChevronUp } from 'lucide-react';
 import { Clipboard, CheckMark, TooltipAnchor } from '@librechat/client';
 import type { FocusEvent, FC } from 'react';
 import { useLocalize, useExpandCollapse } from '~/hooks';
+import RouteChip, { splitRouteMarker } from '~/components/ww/RouteChip';
 import { showThinkingAtom } from '~/store/showThinking';
 import { fontSizeAtom } from '~/store/fontSize';
 import { cn } from '~/utils';
@@ -17,9 +18,18 @@ export const ThinkingContent: FC<{
 }> = memo(({ children }) => {
   const fontSize = useAtomValue(fontSizeAtom);
 
+  const { route, body } = useMemo(
+    () =>
+      typeof children === 'string'
+        ? splitRouteMarker(children)
+        : { route: null, body: children },
+    [children],
+  );
+
   return (
     <div className="relative rounded-lg border border-border-light bg-surface-secondary p-3 pb-8 text-text-secondary">
-      <p className={cn('whitespace-pre-wrap leading-[26px]', fontSize)}>{children}</p>
+      {route != null && <RouteChip label={route} className="mb-2" />}
+      <p className={cn('whitespace-pre-wrap leading-[26px]', fontSize)}>{body}</p>
     </div>
   );
 });
