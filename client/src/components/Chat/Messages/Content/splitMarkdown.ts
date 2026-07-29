@@ -45,7 +45,12 @@ const renderedCodeLang = (lang: string): string =>
  */
 const isExecutableCode = (lang: string): boolean => {
   const normalized = renderedCodeLang(lang);
-  return normalized !== 'math' && normalized !== 'mermaid';
+  return (
+    normalized !== 'math' &&
+    normalized !== 'mermaid' &&
+    normalized !== 'chart' &&
+    normalized !== 'echarts'
+  );
 };
 
 const containsDefinition = (node: MdastNode): boolean => {

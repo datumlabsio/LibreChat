@@ -212,6 +212,12 @@ export default defineConfig(({ command }) => ({
                     return 'mermaid';
                   }
 
+                  // WestWise fork (fork-01): keep echarts (and its zrender dependency)
+                  // in a dedicated chunk so the dynamic import in EChartsBlock stays lazy.
+                  if (normalizedId.includes('echarts') || normalizedId.includes('zrender')) {
+                    return 'echarts';
+                  }
+
                   if (normalizedId.includes('@codesandbox/sandpack')) {
                     return 'sandpack';
                   }

@@ -3,6 +3,7 @@ import { useRecoilValue } from 'recoil';
 import { useToastContext } from '@librechat/client';
 import { PermissionTypes, Permissions, apiBaseUrl } from 'librechat-data-provider';
 import Mermaid, { MermaidErrorBoundary } from '~/components/Messages/Content/Mermaid';
+import EChartsBlock from '~/components/ww/EChartsBlock';
 import CodeBlock from '~/components/Messages/Content/CodeBlock';
 import useHasAccess from '~/hooks/Roles/useHasAccess';
 import { useFileDownload } from '~/data-provider';
@@ -39,10 +40,11 @@ export const code: React.ElementType = memo(function MarkdownCode({
   const lang = match && match[1];
   const isMath = lang === 'math';
   const isMermaid = lang === 'mermaid';
+  const isChart = lang === 'chart' || lang === 'echarts';
   const isSingleLine = isSingleLineCode(children);
 
   const { getNextIndex, resetCounter } = useCodeBlockContext();
-  const blockIndex = useRef(getNextIndex(isMath || isMermaid || isSingleLine)).current;
+  const blockIndex = useRef(getNextIndex(isMath || isMermaid || isChart || isSingleLine)).current;
 
   useEffect(() => {
     resetCounter();
@@ -57,6 +59,9 @@ export const code: React.ElementType = memo(function MarkdownCode({
         <Mermaid id={`mermaid-${blockIndex}`}>{content}</Mermaid>
       </MermaidErrorBoundary>
     );
+  } else if (isChart) {
+    const content = typeof children === 'string' ? children : String(children);
+    return <EChartsBlock lang={lang}>{content}</EChartsBlock>;
   } else if (isSingleLine) {
     return (
       <code onDoubleClick={handleDoubleClick} className={className}>
@@ -88,6 +93,9 @@ export const codeNoExecution: React.ElementType = memo(function MarkdownCodeNoEx
   } else if (lang === 'mermaid') {
     const content = typeof children === 'string' ? children : String(children);
     return <Mermaid>{content}</Mermaid>;
+  } else if (lang === 'chart' || lang === 'echarts') {
+    const content = typeof children === 'string' ? children : String(children);
+    return <EChartsBlock lang={lang}>{content}</EChartsBlock>;
   } else if (isSingleLineCode(children)) {
     return (
       <code onDoubleClick={handleDoubleClick} className={className}>
