@@ -276,11 +276,33 @@ describe('Custom endpoint config secrets', () => {
     );
     expect(
       getConfigSecretInputError('endpoints.custom.0', { name: 'A', apiKey: 'sk-new' }),
-    ).toContain('Cannot write secret fields by array index');
+    ).toContain('Cannot replace endpoints.custom entries by array index');
+    expect(getConfigSecretInputError('endpoints.custom.0', { name: 'A' })).toContain(
+      'Cannot replace endpoints.custom entries by array index',
+    );
     expect(getConfigSecretInputError('endpoints.custom.0.baseURL', 'https://x')).toBeNull();
     expect(
       getConfigSecretInputError('endpoints.custom', [{ name: 'A', apiKey: 'sk-plain-1234' }]),
     ).toBeNull();
+  });
+
+  it('rejects and strips non-array protected containers', () => {
+    expect(getConfigSecretInputError('endpoints', { custom: { apiKey: 'sk-smuggled' } })).toContain(
+      'Protected secret container must be an array',
+    );
+    expect(getConfigSecretInputError('endpoints.custom', { apiKey: 'sk-smuggled' })).toContain(
+      'Protected secret container must be an array',
+    );
+    expect(getConfigSecretInputError('endpoints.custom', undefined)).toBeNull();
+
+    const encrypted = encryptConfigSecrets({ endpoints: { custom: { apiKey: 'sk-smuggled' } } });
+    expect(encrypted.endpoints).toEqual({});
+
+    const redacted = redactConfigSecrets({ endpoints: { custom: { apiKey: 'sk-smuggled' } } });
+    expect(redacted.endpoints).toEqual({});
+
+    const fields = encryptConfigSecretFields({ 'endpoints.custom': { apiKey: 'sk-smuggled' } });
+    expect(fields['endpoints.custom']).toBeUndefined();
   });
 
   it('rejects positional-operator writes to secret fields', () => {
@@ -292,7 +314,7 @@ describe('Custom endpoint config secrets', () => {
     );
     expect(
       getConfigSecretInputError('endpoints.custom.$[elem]', { name: 'A', apiKey: 'sk-new' }),
-    ).toContain('Cannot write secret fields by array index');
+    ).toContain('Cannot replace endpoints.custom entries by array index');
   });
 
   it('fully masks display previews of short secrets', () => {
@@ -344,6 +366,23 @@ describe('Custom endpoint config secrets', () => {
     expect(decryptV3(legacy.apiKey)).toBe('sk-legacy-plaintext');
     expect(legacy.displayApiKey).toBe('sk-leg...text');
     expect(envRef.apiKey).toBeUndefined();
+  });
+
+  it('does not preserve keys for duplicated endpoint identities', () => {
+    const existing = encryptConfigSecrets(
+      endpointsWith([
+        { name: 'Doubled', apiKey: 'sk-first-key-value' },
+        { name: 'Doubled', apiKey: 'sk-second-key-value' },
+        { name: 'Unique', apiKey: 'sk-unique-key-value' },
+      ]),
+    );
+    const next = encryptConfigSecrets(endpointsWith([{ name: 'Doubled' }, { name: 'Unique' }]));
+
+    const preserved = preserveConfigSecrets(next, existing);
+    const [doubled, unique] = preserved.endpoints.custom as Array<Record<string, string>>;
+
+    expect(doubled.apiKey).toBeUndefined();
+    expect(decryptV3(unique.apiKey)).toBe('sk-unique-key-value');
   });
 
   it('preserves omitted API keys for array-valued patches, not cleared ones', () => {

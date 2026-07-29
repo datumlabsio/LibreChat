@@ -266,6 +266,12 @@ function getEncryptedArrayEntryError(
     : null;
 }
 
+function getMalformedContainerError(value: unknown, spec: ArraySecretSpec): string | null {
+  return value != null && !Array.isArray(value)
+    ? `Protected secret container must be an array: ${spec.arrayPath}`
+    : null;
+}
+
 export function getConfigSecretInputError(fieldPath: string, value: unknown): string | null {
   for (const spec of SECTION_SECRET_SPECS) {
     if (fieldPath === spec.displayPath) {
@@ -295,22 +301,24 @@ export function getConfigSecretInputError(fieldPath: string, value: unknown): st
       if (Array.isArray(value)) {
         return `Cannot patch protected secret ancestor as an array: ${fieldPath}`;
       }
-      const error = getEncryptedArrayEntryError(getSecretArray(value, spec, spec.section), spec);
+      const container = getPlainRecord(value)?.[spec.arrayField];
+      const error =
+        getMalformedContainerError(container, spec) ??
+        getEncryptedArrayEntryError(getSecretArray(value, spec, spec.section), spec);
       if (error) {
         return error;
       }
     }
     if (fieldPath === spec.arrayPath) {
-      const error = getEncryptedArrayEntryError(getSecretArray(value, spec, spec.arrayPath), spec);
+      const error =
+        getMalformedContainerError(value, spec) ??
+        getEncryptedArrayEntryError(getSecretArray(value, spec, spec.arrayPath), spec);
       if (error) {
         return error;
       }
     }
     if (isIndexedEntryPath(fieldPath, spec)) {
-      const entry = getPlainRecord(value);
-      if (entry && (spec.secretKey in entry || spec.displayKey in entry)) {
-        return `Cannot write secret fields by array index: ${fieldPath}. Write the ${spec.arrayPath} array instead`;
-      }
+      return `Cannot replace ${spec.arrayPath} entries by array index: ${fieldPath}. Write the ${spec.arrayPath} array instead`;
     }
   }
   return null;
@@ -355,6 +363,27 @@ function applyArraySecretWrites(entries: unknown[], spec: ArraySecretSpec): void
     }
     entry[spec.secretKey] = encryptV3(value);
     entry[spec.displayKey] = getDisplaySecretKey(value);
+  }
+}
+
+/**
+ * Deletes a present non-array protected container (e.g. an object-valued
+ * `endpoints.custom`) so malformed input can never carry secrets past the
+ * encryption and redaction traversals.
+ */
+function removeMalformedSecretContainer(root: unknown, spec: ArraySecretSpec, basePath = ''): void {
+  let container: Record<string, unknown> | null = null;
+  if (basePath === spec.section) {
+    container = getPlainRecord(root);
+  } else if (basePath === '') {
+    container = getPlainRecord(getPlainRecord(root)?.[spec.section]);
+  }
+  if (
+    container != null &&
+    container[spec.arrayField] != null &&
+    !Array.isArray(container[spec.arrayField])
+  ) {
+    delete container[spec.arrayField];
   }
 }
 
@@ -422,6 +451,10 @@ export function encryptConfigSecretFields(
       if (key !== spec.section && key !== spec.arrayPath) {
         continue;
       }
+      if (key === spec.arrayPath && result[key] != null && !Array.isArray(result[key])) {
+        delete result[key];
+        continue;
+      }
       result[key] = encryptConfigSecrets(result[key], key);
     }
   }
@@ -453,6 +486,7 @@ export function encryptConfigSecrets<T>(root: T, basePath = ''): T {
   }
 
   for (const spec of ARRAY_SECRET_SPECS) {
+    removeMalformedSecretContainer(result, spec, basePath);
     const entries = getSecretArray(result, spec, basePath);
     if (entries) {
       applyArraySecretWrites(entries, spec);
@@ -500,13 +534,19 @@ function preserveArraySecrets(
     return;
   }
 
+  const duplicateIdentities = new Set<string>();
   const existingByIdentity = new Map<string, Record<string, unknown>>();
   for (const item of existingEntries) {
     const entry = getPlainRecord(item);
     const identity = normalizeSecretString(entry?.[spec.identityKey]);
-    if (entry && identity && !existingByIdentity.has(identity)) {
-      existingByIdentity.set(identity, entry);
+    if (!entry || !identity) {
+      continue;
     }
+    if (existingByIdentity.has(identity)) {
+      duplicateIdentities.add(identity);
+      continue;
+    }
+    existingByIdentity.set(identity, entry);
   }
 
   for (const item of entries) {
@@ -515,6 +555,9 @@ function preserveArraySecrets(
       continue;
     }
     const identity = normalizeSecretString(entry[spec.identityKey]);
+    if (identity && duplicateIdentities.has(identity)) {
+      continue;
+    }
     const existingEntry = identity ? existingByIdentity.get(identity) : undefined;
     const existingSecret = normalizeSecretString(existingEntry?.[spec.secretKey]);
     if (!existingEntry || !existingSecret) {
@@ -594,6 +637,7 @@ export function redactConfigSecrets<T>(root: T): T {
   }
 
   for (const spec of ARRAY_SECRET_SPECS) {
+    removeMalformedSecretContainer(rootRecord, spec);
     const entries = getSecretArray(rootRecord, spec);
     if (!entries) {
       continue;
