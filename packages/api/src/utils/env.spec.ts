@@ -526,6 +526,21 @@ describe('resolveHeaders', () => {
     expect(result['X-Conversation']).toBe('conv-123');
   });
 
+  it('should process the LIBRECHAT_CONVERSATION_ID placeholder', () => {
+    const headers = { 'x-ww-conversation-id': '{{LIBRECHAT_CONVERSATION_ID}}' };
+
+    const resolved = resolveHeaders({ headers, body: { conversationId: 'conv-123' } });
+    expect(resolved['x-ww-conversation-id']).toBe('conv-123');
+
+    // Resolves to an empty string (not the raw placeholder) when the
+    // conversation id is not yet available (e.g. first message of a new conversation)
+    const missingId = resolveHeaders({ headers, body: {} });
+    expect(missingId['x-ww-conversation-id']).toBe('');
+
+    const missingBody = resolveHeaders({ headers });
+    expect(missingBody['x-ww-conversation-id']).toBe('');
+  });
+
   it('should not resolve env vars introduced via LIBRECHAT_BODY placeholders', () => {
     const body = {
       conversationId: '${TEST_API_KEY}',

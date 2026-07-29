@@ -201,6 +201,32 @@ function processBodyPlaceholders(value: string, body: RequestBody): string {
 }
 
 /**
+ * Replaces the `{{LIBRECHAT_CONVERSATION_ID}}` placeholder with the current
+ * conversation's id from the request body. Resolves to an empty string when the
+ * conversation id is not available (e.g. the first message of a new conversation
+ * before an id exists), so the raw placeholder is never sent to the backend.
+ *
+ * @param value - The string value to process
+ * @param body - The request body object, if available
+ * @returns The processed string with the placeholder replaced
+ */
+function processConversationIdPlaceholder(value: string, body?: RequestBody): string {
+  // Type guard: ensure value is a string
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const placeholder = '{{LIBRECHAT_CONVERSATION_ID}}';
+  if (!value.includes(placeholder)) {
+    return value;
+  }
+
+  const conversationId = body?.conversationId;
+  const replacementValue = conversationId == null ? '' : String(conversationId);
+  return value.replace(new RegExp(placeholder, 'g'), replacementValue);
+}
+
+/**
  * Processes a single string value by replacing various types of placeholders
  *
  * @param originalValue - The original string value to process
@@ -267,6 +293,8 @@ function processSingleValue({
   if (body) {
     value = processBodyPlaceholders(value, body);
   }
+
+  value = processConversationIdPlaceholder(value, body);
 
   return value;
 }
