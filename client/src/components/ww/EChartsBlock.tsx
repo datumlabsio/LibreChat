@@ -30,6 +30,54 @@ interface EChartsBlockProps {
   children: string;
 }
 
+/**
+ * fork-01a: defense-in-depth against option-injection XSS (CVE-2026-45249 /
+ * GHSA-fgmj-fm8m-jvvx and similar HTML-tooltip sinks). The option object comes
+ * from LLM output, so treat it as untrusted:
+ * - drop any function-typed values (cannot occur via JSON.parse, but keep the
+ *   invariant explicit in case the parse path ever changes);
+ * - drop string `formatter` fields containing '<' (HTML template injection);
+ * - force `renderMode: 'richText'` on every tooltip so echarts never renders
+ *   tooltip content through its innerHTML sink (the CVE-2026-45249 vector).
+ */
+const sanitizeOption = (value: unknown): unknown => {
+  if (typeof value === 'function') {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeOption(item));
+  }
+  if (typeof value !== 'object' || value == null) {
+    return value;
+  }
+  const result: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === 'function') {
+      continue;
+    }
+    if (key === 'formatter' && typeof entry === 'string' && entry.includes('<')) {
+      continue;
+    }
+    const sanitized = sanitizeOption(entry);
+    if (key === 'tooltip') {
+      if (Array.isArray(sanitized)) {
+        result[key] = sanitized.map((item) =>
+          typeof item === 'object' && item != null
+            ? { ...(item as Record<string, unknown>), renderMode: 'richText' }
+            : item,
+        );
+        continue;
+      }
+      if (typeof sanitized === 'object' && sanitized != null) {
+        result[key] = { ...(sanitized as Record<string, unknown>), renderMode: 'richText' };
+        continue;
+      }
+    }
+    result[key] = sanitized;
+  }
+  return result;
+};
+
 const CHART_HEIGHT = 360;
 
 const EChartsBlock: React.FC<EChartsBlockProps> = memo(({ lang, children }) => {
@@ -39,7 +87,10 @@ const EChartsBlock: React.FC<EChartsBlockProps> = memo(({ lang, children }) => {
   const chartRef = useRef<ECharts | null>(null);
   const [renderError, setRenderError] = useState(false);
 
-  const option = useMemo(() => parseChartContent(lang, children), [lang, children]);
+  const option = useMemo(() => {
+    const parsed = parseChartContent(lang, children);
+    return parsed == null ? null : (sanitizeOption(parsed) as Record<string, unknown>);
+  }, [lang, children]);
 
   useEffect(() => {
     setRenderError(false);
@@ -60,7 +111,11 @@ const EChartsBlock: React.FC<EChartsBlockProps> = memo(({ lang, children }) => {
           return;
         }
         try {
-          chartRef.current = echarts.init(el, isDarkMode ? 'dark' : undefined);
+          // fork-01a: canvas renderer — never SVG — so option content cannot
+          // become DOM/SVG markup.
+          chartRef.current = echarts.init(el, isDarkMode ? 'dark' : undefined, {
+            renderer: 'canvas',
+          });
           chartRef.current.setOption({ backgroundColor: 'transparent', ...option });
           observer = new ResizeObserver(() => chartRef.current?.resize());
           observer.observe(el);
