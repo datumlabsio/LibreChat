@@ -58,3 +58,16 @@ only, asserts the client bundle in the image (dist present/non-empty, ≥5 hashe
 ≥1 MB, hashed entry referenced, BOTH fork markers) and promotes `:latest` only after the
 assertion + CRITICAL scan pass; the weekly cron re-asserts the published image. **All GHCR
 images from ww-sec-2 up to this fix are NOT-DEPLOYABLE despite green runs (ADR-26).**
+
+2026-07-30 **ww-fix-3** — the image that PASSED the client-bundle assertion still crashed on
+boot: `Cannot find module '@langchain/core/errors'`. `@langchain/core` had de-hoisted (present
+only nested under `@librechat/agents`) as a side effect of the ww-sec-2 override work, so
+top-level `@langchain/openai` could not resolve it. Fix: declare `@langchain/core ^1.2.0` in
+`api/package.json` + `packages/api/package.json` so it hoists (2 upstream files, +1 line each).
+Verified by RUNNING the image: boot gate PASS (`GET /api/config` 200, still up after 5s),
+81 js assets, both fork markers, `@langchain/core` present. **Second false-green of the day** —
+hence ADR-37/38: gates must assert behavior at the layer that consumes the artifact, and a gate
+is untrusted until observed red once (this one was: it failed correctly on the broken image).
+ww-ci now runs a boot assertion and a share-link invariant assertion; `:latest` promotion sits
+behind both plus trivy.
+

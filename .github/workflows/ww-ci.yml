@@ -148,6 +148,19 @@ jobs:
           docker rm -f ww-boot-app ww-boot-mongo >/dev/null
           docker network rm ww-boot >/dev/null
 
+      # Governance invariant (ADR-33, widened per the B-4 finding 2026-07-30): checking
+      # `sharedLinks.public: false` in librechat.yaml is NOT sufficient — anonymous share
+      # reads are gated by a SEPARATE env var (ALLOW_SHARED_LINKS_PUBLIC), so a Deployment
+      # env or .env line alone re-opens them. Assert both layers.
+      - name: Assert share-link invariants
+        run: |
+          set -euo pipefail
+          if git grep -nE '^[^#]*ALLOW_SHARED_LINKS_PUBLIC\s*[=:]\s*(true|"true"|1)' -- . ; then
+            echo "::error::ALLOW_SHARED_LINKS_PUBLIC is enabled somewhere — anonymous share reads would be open"
+            exit 1
+          fi
+          echo "✅ no truthy ALLOW_SHARED_LINKS_PUBLIC (anonymous share reads stay closed)"
+
       - name: Trivy scan (fail CRITICAL)
         uses: aquasecurity/trivy-action@v0.36.0
         with:

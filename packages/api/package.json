@@ -113,6 +113,7 @@
     "@azure/storage-blob": "^12.30.0",
     "@google/genai": "^2.8.0",
     "@keyv/redis": "^4.3.3",
+    "@langchain/core": "^1.2.0",
     "@librechat/agents": "^3.2.46",
     "@librechat/data-schemas": "*",
     "@modelcontextprotocol/sdk": "^1.29.0",
