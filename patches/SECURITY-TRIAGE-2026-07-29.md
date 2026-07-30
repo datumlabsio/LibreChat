@@ -43,9 +43,17 @@ Snapshot: Dependabot reported **61** findings on the default branch (`ww/patches
   and 2 protobufjs moderates (#19, #40) are resolved by the 1.19.0 / 7.6.5 bumps.
 - **Nested react-query lockfile:** 9 axios moderates (#6–14) — same disposition as high #15
   (manifest not installed in the image).
-- **Priority for next review — echarts XSS (#18/#30, CVE-2026-45249):** moderate, but `fork-01`
-  renders ` ```echarts ` fences from LLM output in messages, so this sits directly on our
-  patched surface. Fix is 6.1.0 (major-adjacent; verify fork-01 renderer against it).
+- **echarts XSS (#18/#30, CVE-2026-45249 / GHSA-fgmj-fm8m-jvvx) — MITIGATED 2026-07-30
+  (fork-01a):** moderate, but `fork-01` renders ` ```echarts ` fences from LLM output in
+  messages, so this sat directly on our patched surface. Vector: echarts <6.1.0 renders
+  Lines-series `data[i].name` through the tooltip innerHTML sink unescaped when no custom
+  `tooltip.formatter` is set. First patched version is 6.1.0 — **no fix in our ^5.6.0
+  range** (major bump; deferred until fork-01 is verified against 6.x). Defense-in-depth
+  landed instead in `client/src/components/ww/EChartsBlock.tsx`: option sanitized before
+  `setOption` (function values stripped, string `formatter` fields containing `<` dropped),
+  `tooltip.renderMode` forced to `richText` (bypasses the innerHTML sink entirely), and
+  `echarts.init` pinned to the canvas renderer. Dependabot alert stays open until the
+  6.1.0 upgrade; treat as risk-accepted-with-mitigation.
 - **hono (#50–52):** fixes are within the existing `^4.12.25` override range — a plain
   `npm update hono` closes all three. `@hono/node-server` (#49) needs a 2.x major — evaluate.
 - Remaining: dompurify 5 moderate + 4 low (one NOFIX), mongoose 1, react-router 2,
