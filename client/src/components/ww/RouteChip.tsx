@@ -30,6 +30,9 @@ export function splitRouteMarker(text: string): { route: string | null; body: st
 const RouteChip: React.FC<{ label: string; className?: string }> = memo(
   ({ label, className }) => (
     <span
+      // Build-integrity marker (ADR-25): ww-ci asserts this literal survives into the
+      // bundled client, proving the frontend actually built with our patches.
+      data-ww="ww-route-chip"
       className={cn(
         'inline-flex w-fit items-center rounded-full border border-border-light bg-surface-tertiary px-2 py-0.5 text-xs font-medium text-text-secondary',
         className,

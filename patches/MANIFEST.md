@@ -46,3 +46,15 @@ Health check 2026-07-29: total diff vs v0.8.7 = +413/-3 (QA-measured at health-c
 ww-fix build repair adds +6/-3 in `packages/data-provider/src/request.ts` and +1 in `client/package.json`,
 so upstream-touched source lines are now ~40 vs ~250 — still satisfied. Counted here rather than left out
 so the metric stays honest; the Dockerfile change is infra, as with the other non-patch commits.) fork-06 dropped: v0.8.7 interface config covers all governance needs (agents/marketplace/memories/webSearch/runCode/public-shares).
+
+Build-integrity log (ADR-23/24): 2026-07-30 **ww-fix-1** — client build was FAILING and the
+failure was swallowed by upstream's `npm run frontend;` semicolon chain, so ww-ci reported
+SUCCESS while staging images with no client bundle (root cause: axios-1.19 override from
+ww-sec-2 broke `packages/data-provider/src/request.ts` types; `react-window` missing from the
+lockfile). Fixed: type repair + lockfile dep + Dockerfile `;`→`&&` (3 upstream files, ~10 LOC —
+counted in the health metric, exempt from the ≤6 patch budget per ADR-23). Plus **ww-fix-2**:
+`data-ww` build-integrity markers in the two ww/ components and ww-ci now pushes `:${sha}`
+only, asserts the client bundle in the image (dist present/non-empty, ≥5 hashed js assets,
+≥1 MB, hashed entry referenced, BOTH fork markers) and promotes `:latest` only after the
+assertion + CRITICAL scan pass; the weekly cron re-asserts the published image. **All GHCR
+images from ww-sec-2 up to this fix are NOT-DEPLOYABLE despite green runs (ADR-26).**

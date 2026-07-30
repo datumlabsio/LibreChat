@@ -142,7 +142,11 @@ const EChartsBlock: React.FC<EChartsBlockProps> = memo(({ lang, children }) => {
   }
 
   return (
-    <div className="w-full overflow-hidden rounded-lg border border-border-light bg-surface-primary-alt p-2 dark:bg-white/[0.03]">
+    <div
+      // Build-integrity marker (ADR-25): asserted by ww-ci in the bundled client.
+      data-ww="ww-echarts-block"
+      className="w-full overflow-hidden rounded-lg border border-border-light bg-surface-primary-alt p-2 dark:bg-white/[0.03]"
+    >
       <div ref={containerRef} style={{ width: '100%', height: CHART_HEIGHT }} />
     </div>
   );

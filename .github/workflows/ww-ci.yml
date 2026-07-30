@@ -1,14 +1,20 @@
-# WW fork CI (ADR-16): build the frozen-fork image, scan it, stage it in GHCR.
-# Deploys mirror GHCR → registry.trydatumlabs.com via `skopeo copy` from a machine
-# with registry access, so the scanned image is byte-identical to what ships.
-# The weekly cron re-scans the latest staged image — CVE awareness that works even
-# if every release-announcement channel fails (frozen-fork policy, plan §7).
+# WW fork CI (ADR-16, hardened by ADR-25): build the frozen-fork image, PROVE the
+# client bundle is really in it, scan it, and only then move the :latest pointer.
+#
+# Why the assertion exists (ADR-26): upstream's Dockerfile chained
+# `npm run frontend; npm prune …` with a SEMICOLON, so a failed client build was
+# swallowed — CI reported SUCCESS while staging images with no client bundle.
+# The Dockerfile now uses `&&` (ww-fix), and this workflow additionally refuses to
+# publish anything that cannot be shown to contain the built client + our patches.
+#
+# Deploys mirror GHCR → registry.trydatumlabs.com with `skopeo copy` by DIGEST from a
+# run whose assertion passed (ADR-27). Never mirror a floating tag.
 name: ww-ci
 on:
   push:
     branches: [ww/patches]
   schedule:
-    - cron: "17 6 * * 1" # weekly rescan, Monday 06:17 UTC
+    - cron: "17 6 * * 1" # weekly rescan + re-assert of the published image
   workflow_dispatch:
 
 permissions:
@@ -18,6 +24,9 @@ permissions:
 
 env:
   IMAGE: ghcr.io/datumlabsio/librechat-ww
+  # Literals that must survive minification into the client bundle (ADR-25).
+  MARKER_CHIP: ww-route-chip
+  MARKER_ECHARTS: ww-echarts-block
 
 jobs:
   build-scan-stage:
@@ -35,22 +44,63 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image (only on push/dispatch — cron rescans the staged image)
+      # Build pushes the immutable :sha tag ONLY. :latest is moved later, after the
+      # assertion and the CRITICAL scan both pass, so :latest can never point at an
+      # unasserted image (ADR-25).
+      - name: Build image (sha tag only)
         if: github.event_name != 'schedule'
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: |
-            ${{ env.IMAGE }}:${{ github.sha }}
-            ${{ env.IMAGE }}:latest
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Trivy scan (fail CRITICAL, warn HIGH)
+      - name: Resolve image under test
+        id: img
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "ref=${IMAGE}:latest" >> "$GITHUB_OUTPUT"   # cron re-asserts what is published
+          else
+            echo "ref=${IMAGE}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── The gate. Runs on push AND on the weekly cron (pull-and-inspect, seconds):
+      # the cron path is what would have caught a stale/bundle-less :latest.
+      - name: Assert client bundle
+        run: |
+          set -euo pipefail
+          REF='${{ steps.img.outputs.ref }}'
+          echo "Asserting client bundle in ${REF}"
+          docker pull -q "$REF"
+          docker create --name ww-assert "$REF" >/dev/null
+          rm -rf /tmp/dist && mkdir -p /tmp/dist
+          docker cp ww-assert:/app/client/dist /tmp/dist/ >/dev/null
+          docker rm ww-assert >/dev/null
+          D=/tmp/dist/dist
+
+          test -s "$D/index.html" || { echo "::error::client dist/index.html missing or empty"; exit 1; }
+          COUNT=$(find "$D/assets" -type f -name '*.js' | wc -l)
+          [ "$COUNT" -ge 5 ] || { echo "::error::only $COUNT js assets — client build looks truncated"; exit 1; }
+          BYTES=$(du -sb "$D/assets" | cut -f1)
+          [ "$BYTES" -ge 1000000 ] || { echo "::error::assets total ${BYTES}B — implausibly small"; exit 1; }
+          grep -qE 'assets/index-[A-Za-z0-9_-]+\.js' "$D/index.html" \
+            || { echo "::error::index.html references no hashed entry bundle"; exit 1; }
+
+          # Our patches must be present in the shipped bundle, not just in git.
+          grep -rqF "$MARKER_CHIP" "$D/assets" \
+            || { echo "::error::fork-02 marker $MARKER_CHIP absent from bundle"; exit 1; }
+          grep -rqF "$MARKER_ECHARTS" "$D/assets" \
+            || { echo "::error::fork-01 marker $MARKER_ECHARTS absent from bundle"; exit 1; }
+
+          echo "✅ client bundle asserted: $COUNT js assets, ${BYTES}B, both fork markers present"
+
+      - name: Trivy scan (fail CRITICAL)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.IMAGE }}:latest
+          image-ref: ${{ steps.img.outputs.ref }}
           format: table
           exit-code: "1"
           severity: CRITICAL
@@ -60,8 +110,18 @@ jobs:
         if: always()
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.IMAGE }}:latest
+          image-ref: ${{ steps.img.outputs.ref }}
           format: table
           exit-code: "0"
           severity: HIGH
           ignore-unfixed: true
+
+      # Only now is the image deployable. The cron never retags (ADR-25).
+      - name: Promote to :latest (asserted + scanned)
+        if: github.event_name != 'schedule'
+        run: |
+          set -euo pipefail
+          docker tag "${IMAGE}:${{ github.sha }}" "${IMAGE}:latest"
+          docker push -q "${IMAGE}:latest"
+          echo "Deployable digest for skopeo mirror (ADR-27):"
+          docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE}:${{ github.sha }}"
