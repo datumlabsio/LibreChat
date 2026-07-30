@@ -55,8 +55,10 @@ COPY --chown=node:node . .
 
 RUN \
     # React client build with configurable memory
-    NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" npm run frontend; \
-    npm prune --production; \
+    # WestWise fix: `&&` (was `;`) — a `;` chain swallowed frontend build failures,
+    # so CI staged images with no client bundle while reporting success.
+    NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" npm run frontend && \
+    npm prune --production && \
     npm cache clean --force
 
 # Optional build metadata surfaced in Settings -> About for support triage.
