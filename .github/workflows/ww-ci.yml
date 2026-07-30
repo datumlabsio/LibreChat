@@ -100,6 +100,54 @@ jobs:
 
           echo "✅ client bundle asserted: $COUNT js assets, ${BYTES}B, both fork markers present"
 
+      # ── Second gate: does the app actually START? The bundle assertion above proves
+      # files EXIST; it cannot prove the server boots. On 2026-07-30 an image passed the
+      # bundle assertion and still crashed on launch (`Cannot find module
+      # '@langchain/core/errors'` — a lockfile hoisting regression from a security
+      # override). Two "green CI" illusions in one day, both from checking artifacts
+      # instead of behavior. This step closes that class.
+      - name: Assert server boots
+        run: |
+          set -euo pipefail
+          REF='${{ steps.img.outputs.ref }}'
+          docker network create ww-boot >/dev/null
+          docker run -d --name ww-boot-mongo --network ww-boot mongo:7 --noauth >/dev/null
+          docker run -d --name ww-boot-app --network ww-boot -p 3080:3080 \
+            -e HOST=0.0.0.0 -e PORT=3080 \
+            -e MONGO_URI=mongodb://ww-boot-mongo:27017/LibreChat \
+            -e JWT_SECRET=cibootsecret -e JWT_REFRESH_SECRET=cibootrefresh \
+            -e CREDS_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+            -e CREDS_IV=0123456789abcdef0123456789abcdef \
+            -e ALLOW_EMAIL_LOGIN=true -e NO_INDEX=true -e SEARCH=false \
+            "$REF" >/dev/null
+
+          ok=0
+          for i in $(seq 1 40); do
+            if curl -sf -o /dev/null http://localhost:3080/api/config; then ok=1; break; fi
+            if [ "$(docker inspect -f '{{.State.Running}}' ww-boot-app)" != "true" ]; then
+              echo "::error::container exited during boot — logs follow"; break
+            fi
+            sleep 3
+          done
+
+          if [ "$ok" != "1" ]; then
+            echo "----- container logs -----"
+            docker logs ww-boot-app 2>&1 | tail -40
+            docker rm -f ww-boot-app ww-boot-mongo >/dev/null 2>&1 || true
+            docker network rm ww-boot >/dev/null 2>&1 || true
+            echo "::error::server did not serve /api/config — image is NOT deployable"
+            exit 1
+          fi
+
+          # Still running after serving? (catches boot-then-crash.)
+          sleep 5
+          [ "$(docker inspect -f '{{.State.Running}}' ww-boot-app)" = "true" ] \
+            || { docker logs ww-boot-app 2>&1 | tail -40; echo "::error::server exited after first response"; exit 1; }
+
+          echo "✅ server boots and serves /api/config"
+          docker rm -f ww-boot-app ww-boot-mongo >/dev/null
+          docker network rm ww-boot >/dev/null
+
       - name: Trivy scan (fail CRITICAL)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
