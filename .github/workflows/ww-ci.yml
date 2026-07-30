@@ -86,8 +86,11 @@ jobs:
           [ "$COUNT" -ge 5 ] || { echo "::error::only $COUNT js assets — client build looks truncated"; exit 1; }
           BYTES=$(du -sb "$D/assets" | cut -f1)
           [ "$BYTES" -ge 1000000 ] || { echo "::error::assets total ${BYTES}B — implausibly small"; exit 1; }
-          grep -qE 'assets/index-[A-Za-z0-9_-]+\.js' "$D/index.html" \
-            || { echo "::error::index.html references no hashed entry bundle"; exit 1; }
+          # rolldown/vite emit `assets/index.<hash>.js` (dot separator); older vite used
+          # `index-<hash>.js`. Accept either so the assertion tracks the bundler, not a guess.
+          grep -qE 'assets/index[.-][A-Za-z0-9_-]{6,}\.js' "$D/index.html" \
+            || { echo "::error::index.html references no hashed entry bundle"; \
+                 grep -oE '(src|href)="[^"]*\.js"' "$D/index.html" | head -5; exit 1; }
 
           # Our patches must be present in the shipped bundle, not just in git.
           grep -rqF "$MARKER_CHIP" "$D/assets" \
